@@ -5,6 +5,13 @@ import re
 import time
 from blessings import Terminal
 import atexit
+import argparse
+
+parser = argparse.ArgumentParser(description='Process some integers.')
+parser.add_argument('--servers', default=None,type=str,required=False,
+                    help='{username}@{ip}的形式来表示主机,多个主机之间用逗号分隔,必须保证已经免密钥')
+parser.add_argument('--config_file',default="server_list",type=str,required=False,
+                    help='配置文件的位置,一行一个主机地址')
 
 
 class GPUHost:
@@ -98,15 +105,12 @@ class GPUStat:
         return gpu_stats
 
     def print_stats(self):
-        while True:
-            gpu_stats = self.get_remote_gpu_stats()
-            with self.t.fullscreen():
-                now = time.asctime(time.localtime(time.time()))
-                print("%s | found %d gpu hosts" % (now, len(self.gpu_hosts)))
-                for ip in gpu_stats:
-                    self.print_one_gpu(ip, gpu_stats[ip])
-
-                time.sleep(1)
+        gpu_stats = self.get_remote_gpu_stats()
+        # with self.t.fullscreen():
+        now = time.asctime(time.localtime(time.time()))
+        print("%s | found %d gpu hosts" % (now, len(self.gpu_hosts)))
+        for ip in gpu_stats:
+            self.print_one_gpu(ip, gpu_stats[ip])
 
     def print_one_gpu(self, ip, gpu_stat):
         print(('\n{t.bold}{t.black}{t.on_white}%s{t.normal}' %
@@ -114,7 +118,7 @@ class GPUStat:
         print(
             self.t.bold('-----------------------------------------------------------------------------'))
         for gpu in gpu_stat:
-            print(('{t.bold}{t.magenta}%d {t.white}|{t.blue} %s {t.white}| {t.bold}{t.red}%s{t.white}/{t.green}%s{t.white} | {t.white} fan: %s(%s) | process: %d{t.normal}' %
+            print(('{t.bold}{t.magenta}%d {t.white}|{t.blue} %s {t.white}| {t.bold}{t.red}%s{t.white}/{t.green}%s{t.white} | {t.white} fan: %s (%s) | process: %d{t.normal}' %
                    (gpu['idx'], gpu['model'], gpu['mem_used'], gpu['mem_total'], gpu['fan_speed'], gpu['temp'], len(gpu['pids']))).format(t=self.t))
             for id, pid in enumerate(gpu['pids']):
                 print(("{t.bold}{t.cyan}[%d]{t.yellow}%s\t{t.white}%s\t{t.white}%s\t{t.white}%s{t.normal}" % (id, pid['user'],
@@ -125,7 +129,7 @@ class GPUStat:
 
 def get_server_list(path="./server_list"):
     server_list = []
-    with open("./server_list", 'r') as f:
+    with open(path, 'r') as f:
         for line in f:
             username, ip = line.strip().split("@")
             server_list.append({
@@ -137,6 +141,19 @@ def get_server_list(path="./server_list"):
 
 
 if __name__ == '__main__':
-    server_list = get_server_list()
-    main = GPUStat(server_list)
-    main.print_stats()
+    args = parser.parse_args()
+    server_list = []
+    if args.servers==None and args.config_file==None:
+        print("必须设置servers参数或者指定config配置文件")
+    elif args.servers=='' and args.config_file=='':
+        print('配置内容不能为空')
+    elif args.servers!=None:
+        server_list = [{'username':x.split('@')[0],'ip':x.split('@')[1]} for x in args.servers.strip().split(',')]
+    elif os.path.exists(args.config_file)==False:
+        print("配置文件必须存在")
+    else:
+        server_list = get_server_list(args.config_file)
+
+    if len(server_list)!=0:
+        main = GPUStat(server_list)
+        main.print_stats()
